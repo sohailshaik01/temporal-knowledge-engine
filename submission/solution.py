@@ -27,10 +27,10 @@ def authority(url,title):
 
 class TemporalKnowledge:
     def __init__(self):
-        self.snapshots=[];self.index={};self.df={};self.conflict_cache=None
+        self.snapshots=[];self.index={};self.df={};self.postings={};self.conflict_cache=None
 
     def ingest(self,snapshot):
-        docs=[]; df=Counter()
+        docs=[]; df=Counter(); postings=defaultdict(list)
         for p in snapshot.pages:
             md=re.sub(r'!\[[^]]*\]\([^)]*\)',' ',p.markdown)
             md=re.sub(r'\[([^]]+)\]\([^)]*\)',r'\1',md)
@@ -56,9 +56,11 @@ class TemporalKnowledge:
                 if not words:continue
                 d={'url':p.url,'title':p.title,'head':head,'body':block,'words':words,'auth':authority(p.url,p.title),'sid':snapshot.snapshot_id}
                 docs.append(d);df.update(words.keys())
+                for w in words:postings[w].append(len(docs)-1)
         self.snapshots.append((snapshot.taken_on,snapshot.snapshot_id))
         self.index[snapshot.snapshot_id]=docs
         self.df[snapshot.snapshot_id]=df
+        self.postings[snapshot.snapshot_id]=postings
         self.conflict_cache=None
 
     def _date(self,as_of):
@@ -71,13 +73,16 @@ class TemporalKnowledge:
     def _rank(self,q,sid):
         qt=Counter(toks(q));docs=self.index[sid];df=self.df[sid];n=len(docs)
         scored=[]
-        for d in docs:
+        candidates=set()
+        for w in qt:candidates.update(self.postings[sid].get(w,()))
+        for idx in candidates:
+            d=docs[idx]
             match=set(qt)&d['words'].keys()
             if not match:continue
             s=sum((1+math.log(1+qt[w]))*math.log(1+(n-df[w]+.5)/(df[w]+.5))*min(2,1+math.log(d['words'][w])) for w in match)
             titlewords=set(toks(d['title']+' '+d['head']+' '+d['url'].replace('/',' ')))
-            s+=sum(1.9 for w in match if w in titlewords)
-            s+=min(3,d['auth']*.48)
+            s+=sum(4.5 for w in match if w in titlewords)
+            s+=d['auth']*1.25
             # Preserve explicit terms and years; unrelated tiers must not win.
             for m in re.findall(r'\b(?:\d{1,3}[- ]month|\d{4} model|\d{1,3}/1|jumbo|platinum|rewards|bright|share|business)\b',q.lower()):
                 if m in (d['body']+' '+d['head']+' '+d['title']).lower():s+=3
@@ -106,7 +111,9 @@ class TemporalKnowledge:
         ranked_pieces=sorted(pieces,key=lambda p:(len(qwords&set(toks(p))),bool(NUMBER.search(p))),reverse=True)
         candidate=ranked_pieces[0] if ranked_pieces else body
         if len(candidate)<30 and len(ranked_pieces)>1:candidate+=' '+ranked_pieces[1]
-        candidate=candidate[:430].strip()
+        if len(candidate)<120 and len(body)<950 and ('|' in body or len(re.findall(r'\d+(?:\.\d+)?%',body))>1):
+            candidate=body
+        candidate=candidate[:900].strip()
         if not candidate:return Answer("I don't know; please contact Dupaco.",confident=False)
         return Answer(text=candidate,sources=[Source(url=best['url'],snapshot_id=sid,quote=candidate[:220])],confident=True)
 
