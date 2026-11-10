@@ -15,3 +15,7 @@ The latest local run against the 40-question public evaluation scored 0.3722 wit
 ## Evidence ranking
 
 The retrieval ranker now favors numeric table rows over rate disclaimers, distinguishes jumbo certificate tiers from standard certificates, and downranks historical educational material for current loan-rate questions. It also rewards explicit numeric qualifiers in the question. These are general ranking rules rather than stored answers to the evaluation questions.
+
+## Evaluation update
+
+The latest local run against the supplied 40-question public evaluation scored 0.4867 overall (previous recorded run: 0.3722), with 4.2 seconds for ingestion and 0.26 seconds at the 95th percentile for answers. This run did not include repeated-question checks. Product category questions now collect evidence across multiple rows, loan and branch questions abstain when specific evidence is missing, and the rate ranker better distinguishes common tiers. Conflict resolution and current-value questions remain weak and require further work. These scores are development diagnostics, not hidden-set results.
