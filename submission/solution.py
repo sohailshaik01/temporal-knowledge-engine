@@ -86,6 +86,29 @@ class TemporalKnowledge:
             # Preserve explicit terms and years; unrelated tiers must not win.
             for m in re.findall(r'\b(?:\d{1,3}[- ]month|\d{4} model|\d{1,3}/1|jumbo|platinum|rewards|bright|share|business)\b',q.lower()):
                 if m in (d['body']+' '+d['head']+' '+d['title']).lower():s+=3
+            # Prefer data rows over boilerplate and historical commentary.
+            body=d['body'].lower()
+            if body.startswith('|') and body.count('|')>=3 and re.search(r'\d+(?:\.\d+)?%',body):s+=14
+            if re.search(r'\d+(?:\.\d+)?%',body) and any(w in qt for w in ('apr','apy','rate','dividend')):s+=3
+            if any(w in qt for w in ('apr','apy','rate','dividend')) and not re.search(r'\d+(?:\.\d+)?%',body):s-=12
+            if ('mortgage' in qt or 'loan' in qt) and ('/learn/' in d['url'] or '/newsroom/' in d['url']):s-=18
+            if 'certificate' in qt and 'checking' in d['url']:s-=12
+            if 'mortgage' in qt and ('/rates' in d['url'] or '/home-loans' in d['url']):s+=8
+            if 'certificate' in qt and 'jumbo' not in qt and 'jumbo' in body:s-=11
+            if 'certificate' in qt and 'jumbo' in qt and 'jumbo' in body:s+=8
+            if 'checking' in qt and 'checking' in body:s+=5
+            if 'share' in qt and 'saving' in qt and 'share savings' in body:s+=13
+            if 'share' in qt and 'saving' in qt and 'business' in body:s-=7
+            if 'mortgage' in qt and '30' in qt and '30-year fixed conventional' in body:s+=15
+            if 'mortgage' in qt and 'relief' not in qt and 'relief' in body:s-=12
+            if 'platinum' in qt and 'introductory' in body:s-=10
+            if 'rate' in qt and 'apr' in qt and 'balance transfer' in body:s-=7
+            if 'hour' in qt and 'drive' in qt and 'drive' in body:s+=12
+            if 'branch' in qt and 'galena' in qt and 'galena' in body:s+=7
+            for numeric in re.findall(r'\b\d[\d,]*(?:\.\d+)?\b',q):
+                if len(numeric)>=2 and numeric in body:s+=5
+            if 'locator' in qt and '/contact' in d['url']:s+=12
+            if 'link' in qt and 'certificate' in qt and '/personal/savings-account' in d['url']:s+=12
             if len(match)<min(2,len(qt)):s-=4
             scored.append((s,d))
         scored.sort(key=lambda x:(-x[0],-x[1]['auth'],x[1]['url']))
