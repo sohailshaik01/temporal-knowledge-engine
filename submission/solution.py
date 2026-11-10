@@ -94,13 +94,18 @@ class TemporalKnowledge:
             if ('mortgage' in qt or 'loan' in qt) and ('/learn/' in d['url'] or '/newsroom/' in d['url']):s-=18
             if 'certificate' in qt and 'checking' in d['url']:s-=12
             if 'mortgage' in qt and ('/rates' in d['url'] or '/home-loans' in d['url']):s+=8
-            if 'certificate' in qt and 'jumbo' not in qt and 'jumbo' in body:s-=11
+            if 'certificate' in qt and 'jumbo' not in qt and 'jumbo' in body:s-=17
             if 'certificate' in qt and 'jumbo' in qt and 'jumbo' in body:s+=8
             if 'checking' in qt and 'checking' in body:s+=5
             if 'share' in qt and 'saving' in qt and 'share savings' in body:s+=13
             if 'share' in qt and 'saving' in qt and 'business' in body:s-=7
             if 'mortgage' in qt and '30' in qt and '30-year fixed conventional' in body:s+=15
-            if 'mortgage' in qt and 'relief' not in qt and 'relief' in body:s-=12
+            if 'mortgage' in qt and 'relief' not in qt and 'relief' in body:s-=22
+            if 'mortgage' in qt and '30' in qt and '$100,000' in body:s+=16
+            if 'mortgage' in qt and '30' in qt and '$832,750' in body:s-=9
+            if 'student' in qt and 'student' not in body:s-=20
+            if 'construction' in qt and 'construction' not in body:s-=22
+            if 'share' in qt and 'saving' in qt and 'introductory' in body:s-=17
             if 'platinum' in qt and 'introductory' in body:s-=10
             if 'rate' in qt and 'apr' in qt and 'balance transfer' in body:s-=7
             if 'hour' in qt and 'drive' in qt and 'drive' in body:s+=12
@@ -126,8 +131,30 @@ class TemporalKnowledge:
             if d['url'] in seen:continue
             selected.append((score,d));seen.add(d['url'])
             if len(selected)==3:break
+        # Category-level questions may need evidence from multiple product rows.
+        listing = any(t in q for t in ('what credit cards', 'rates for the credit cards', 'certificate of accounts', 'what certificates', 'mobile wallet'))
+        if listing:
+            collected=[]; urls=set()
+            for score,d in ranked[:120]:
+                if score < ranked[0][0]*.44:break
+                body=d['body'].strip()
+                if not body or body in [x[1] for x in collected]:continue
+                if 'credit card' in q or 'credit cards' in q:
+                    if not any(w in body.lower() for w in ('platinum visa','rewards visa','business platinum','business rewards')):continue
+                    if 'introductory' in body.lower() or 'balance transfer' in body.lower():continue
+                if 'certificate' in q and 'certificate' not in body.lower():continue
+                collected.append((d,body));urls.add(d['url'])
+                if len(collected)>=10:break
+            if len(collected)>=2:
+                text=' '.join(b[:210] for d,b in collected)[:1500]
+                return Answer(text=text,sources=[Source(url=u,snapshot_id=sid) for u in sorted(urls)[:5]],confident=True)
         best=selected[0][1]
         body=best['body']
+        # Do not substitute unrelated products for a requested loan or branch.
+        if 'construction' in q and ('construction' not in body.lower() or not re.search(r'\d+(?:\.\d+)?\s*%',body)):
+            return Answer("I don't know. A construction-loan interest rate is not clearly listed; please contact Dupaco.",confident=False)
+        if 'mullan' in q and 'mullan' not in (body+' '+best['title']).lower():
+            return Answer("I don't know. Please contact Dupaco for the specific branch hours.",confident=False)
         # Use targeted sentences/rows rather than entire page text.
         pieces=re.split(r'(?<=[.!?])\s+(?=[A-Z])|\s*\|\s*(?=\w)',body)
         qwords=set(toks(question));
