@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.env
+snapshots/
+snapshots_zip/
+*.sqlite
+*.db
+*.log
+report.json
+per_question.jsonl
+.DS_Store
