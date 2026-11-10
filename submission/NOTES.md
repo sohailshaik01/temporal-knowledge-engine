@@ -37,3 +37,9 @@ Navigational questions return grounded destination links. Branch-closure questio
 The latest local development run across all 40 public questions scored **0.7313**, compared with **0.5797** before this iteration. Ten repeat checks were enabled, with 1.0 reported repeat consistency, zero execution errors, and a 9.9-second ingestion time. Category scores included temporal-as-of 0.75, stale-trap 0.59, tier-disambiguation 1.00, and conflict-resolution 0.33. These are public-set diagnostics, not hidden-set performance. The local implementation was tested before the corresponding source modules were committed; a clean-checkout full evaluation remains necessary to verify the committed build independently.
 
 Remaining limitations include incomplete list aggregation, some cross-page conflicts, and questions whose relevant facts are not represented by a structured table.
+
+## Evidence aggregation iteration
+
+The evidence-first module now handles mobile-wallet compatibility, complete credit-card APR rows when present, year-qualified volunteer reporting, Forbes recognition, Home$tart descriptions, membership eligibility, and contact updates. Each specialized answer requires matching passages or typed rate facts from the selected snapshot, retains the supporting source URL, and falls back to the standard retriever when insufficient evidence exists. Standalone synthetic tests cover multi-wallet extraction, unsupported claims, and credit-card APR aggregation.
+
+**Evaluation status:** This change has not yet been measured against the full participant-kit public evaluator. The earlier 0.7313 score must not be interpreted as the score of this revision. Run the public evaluator locally before judging whether the 0.85 development target has been reached.
