@@ -19,3 +19,7 @@ The retrieval ranker now favors numeric table rows over rate disclaimers, distin
 ## Evaluation update
 
 The latest local run against the supplied 40-question public evaluation scored 0.4867 overall (previous recorded run: 0.3722), with 4.2 seconds for ingestion and 0.26 seconds at the 95th percentile for answers. This run did not include repeated-question checks. Product category questions now collect evidence across multiple rows, loan and branch questions abstain when specific evidence is missing, and the rate ranker better distinguishes common tiers. Conflict resolution and current-value questions remain weak and require further work. These scores are development diagnostics, not hidden-set results.
+
+## Contact and branch evidence
+
+The latest local public evaluation run (40 questions, repeat checks disabled) scored 0.5177, up from the previous recorded 0.4867. Snapshot ingestion took 4.3 seconds. The retrieval scorer now gives additional weight to passages with explicit telephone numbers for contact queries and clock times for branch-hours queries. The conflict-resolution and current-value categories remain unresolved; this is not a final submission benchmark.
