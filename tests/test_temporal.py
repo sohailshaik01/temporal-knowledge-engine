@@ -63,7 +63,7 @@ def test_multiple_certificate_terms_conflict():
         ("01_2026-01-05_baseline", "2026-01-05", "2.95%"),
         ("02_2026-03-01_update", "2026-03-01", "3.50%"),
     ]:
-        md = f"# Certificates\\n\\n6-month certificate APY: {rate}\\n\\n12-month certificate APY: 3.10%"
+        md = f"# Certificates\n\n6-month certificate APY: {rate}\n\n12-month certificate APY: 3.10%"
         ks.ingest(Snapshot(sid, day, [
             Page(url, "Certificates", md, day)]))
     changes = ks.conflicts()
