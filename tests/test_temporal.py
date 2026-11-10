@@ -30,6 +30,33 @@ def test_temporal_rate_change():
     assert ks._date(None) == "02_2026-09-28"
 
 
+def test_typed_tiers_and_effective_dates():
+    ks = build()
+    markdown = """# Savings Rates
+| Account Type | Balance Tier | Dividend Rate | Annual Percentage Yield (APY) |
+| --- | --- | --- | --- |
+| Share Savings | $0-$99 | 0.10% | 0.10% |
+| Share Savings | $100-$999 | 0.20% | 0.20% |
+Rates are effective as of 06/15/2026 and are subject to change.
+"""
+    ks.ingest(Snapshot("01_2026-09-28", "2026-09-28", [
+        Page("https://example.test/rates", "Rates", markdown, "2026-09-28")]))
+    facts = ks.facts["01_2026-09-28"]
+    assert len(facts) == 4, facts
+    assert {f["metric"] for f in facts} == {"apy", "dividend rate"}
+    assert {f["effective"] for f in facts} == {"2026-06-15"}
+    assert not ks.conflicts(), "Distinct balance tiers must not be treated as contradictions"
+
+
+def test_missing_history():
+    ks = build()
+    ks.ingest(Snapshot("01_2026-09-28", "2026-09-28", [
+        Page("https://example.test/rates", "Rates", "# Rates\nSome account information.", "2026-09-28")]))
+    assert not ks.answer("What was the rate?", as_of="2026-01-01").confident
+
+
 if __name__ == "__main__":
     test_temporal_rate_change()
+    test_typed_tiers_and_effective_dates()
+    test_missing_history()
     print("Synthetic temporal checks passed")
