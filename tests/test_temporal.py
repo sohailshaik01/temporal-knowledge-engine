@@ -55,8 +55,28 @@ def test_missing_history():
     assert not ks.answer("What was the rate?", as_of="2026-01-01").confident
 
 
+
+def test_multiple_certificate_terms_conflict():
+    ks = build()
+    url = "https://example.test/certificates"
+    for sid, day, rate in [
+        ("01_2026-01-05_baseline", "2026-01-05", "2.95%"),
+        ("02_2026-03-01_update", "2026-03-01", "3.50%"),
+    ]:
+        md = f"# Certificates\\n\\n6-month certificate APY: {rate}\\n\\n12-month certificate APY: 3.10%"
+        ks.ingest(Snapshot(sid, day, [
+            Page(url, "Certificates", md, day)]))
+    changes = ks.conflicts()
+    matching = [c for c in changes if "6-month" in c.topic.lower()]
+    assert len(matching) == 1, changes
+    assert matching[0].resolution == "3.50%", changes
+    assert set(matching[0].values) == {"2.95%", "3.50%"}, changes
+    assert not any("12-month" in c.topic.lower() for c in changes), changes
+
+
 if __name__ == "__main__":
     test_temporal_rate_change()
     test_typed_tiers_and_effective_dates()
     test_missing_history()
+    test_multiple_certificate_terms_conflict()
     print("Synthetic temporal checks passed")
