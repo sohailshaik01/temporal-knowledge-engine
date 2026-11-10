@@ -114,6 +114,8 @@ class TemporalKnowledge:
                 if len(numeric)>=2 and numeric in body:s+=5
             if 'locator' in qt and '/contact' in d['url']:s+=12
             if 'link' in qt and 'certificate' in qt and '/personal/savings-account' in d['url']:s+=12
+            if ('phone' in qt or 'call' in qt or 'number' in qt) and re.search(r'\b\d{3}[-. ]\d{3}[-. ]\d{4}\b',body):s+=13
+            if ('hour' in qt or 'close' in qt or 'open' in qt) and re.search(r'\b(?:a\.?m\.?|p\.?m\.?|noon)\b',body):s+=12
             if len(match)<min(2,len(qt)):s-=4
             scored.append((s,d))
         scored.sort(key=lambda x:(-x[0],-x[1]['auth'],x[1]['url']))
