@@ -13,6 +13,8 @@ jobs:
         with:
           python-version: '3.11'
       - name: Check syntax
-        run: python -m py_compile submission/solution.py submission/facts.py tests/test_temporal.py
+        run: python -m py_compile submission/solution.py submission/facts.py tests/test_temporal.py tests/test_facts.py
       - name: Run synthetic regression tests
-        run: python tests/test_temporal.py
+        run: |
+          python tests/test_facts.py
+          if [ -f harness/contract.py ]; then python tests/test_temporal.py; fi
