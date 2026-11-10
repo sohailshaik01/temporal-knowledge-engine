@@ -23,3 +23,17 @@ The latest local run against the supplied 40-question public evaluation scored 0
 ## Contact and branch evidence
 
 The latest local public evaluation run (40 questions, repeat checks disabled) scored 0.5177, up from the previous recorded 0.4867. Snapshot ingestion took 4.3 seconds. The retrieval scorer now gives additional weight to passages with explicit telephone numbers for contact queries and clock times for branch-hours queries. The conflict-resolution and current-value categories remain unresolved; this is not a final submission benchmark.
+
+## Structured facts and historical validity
+
+The typed rate extractor stores product and balance/term qualifiers, the financial metric, observed value, source URL, snapshot identifier, and any explicitly published effective date. Queries first attempt qualified fact matching when the requested metric and product are clear, then fall back to the indexed passage retriever. APR, APY, and dividend rate remain distinct. Snapshot selection is ordered by capture date; an effective date is not inferred from a crawl timestamp.
+
+Conflict detection now includes disagreements between matching product/tier/metric facts on different official pages within the latest snapshot, in addition to historical changes. A later explicit effective date has precedence, followed by an official rate sheet and source authority. The system cannot infer a precise validity interval where none was published.
+
+Navigational questions return grounded destination links. Branch-closure questions are answered from the closure notice when it is available in the selected snapshot. The offline runtime uses no external services.
+
+## Latest public evaluation
+
+The latest local development run across all 40 public questions scored **0.7313**, compared with **0.5797** before this iteration. Ten repeat checks were enabled, with 1.0 reported repeat consistency, zero execution errors, and a 9.9-second ingestion time. Category scores included temporal-as-of 0.75, stale-trap 0.59, tier-disambiguation 1.00, and conflict-resolution 0.33. These are public-set diagnostics, not hidden-set performance. The local implementation was tested before the corresponding source modules were committed; a clean-checkout full evaluation remains necessary to verify the committed build independently.
+
+Remaining limitations include incomplete list aggregation, some cross-page conflicts, and questions whose relevant facts are not represented by a structured table.
