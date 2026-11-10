@@ -36,17 +36,17 @@ def answer_evidence(question, sid, docs, facts, observed_date):
     if 'forbes' in q:
         candidates=[d for d in docs if 'forbes' in d['body'].lower()
                     and ('forbes' in d['url'].lower() or 'forbes' in d['title'].lower())]
-        candidates.sort(key=lambda d:(not bool(re.search(r'\\bfifth\\b|\\b5th\\b',d['body'],re.I)),
+        candidates.sort(key=lambda d:(not bool(re.search(r'\bfifth\b|\b5th\b',d['body'],re.I)),
                                       'newsroom/' not in d['url'], -d['auth']))
-        if candidates and re.search(r'\\bfifth\\b|\\b5th\\b',candidates[0]['body'],re.I):
+        if candidates and re.search(r'\bfifth\b|\b5th\b',candidates[0]['body'],re.I):
             return result(candidates[0]['body'],candidates[:1])
 
     if 'volunteer' in q and ('employees' in q or 'how many' in q):
         candidates=[]
         for d in docs:
-            m=re.search(r'\\b(\\d{2,4})\\s+Dupaco employees\\b.{0,110}\\b(?:volunteer time off|VTO)\\b',d['body'],re.I)
+            m=re.search(r'\b(\d{2,4})\s+Dupaco employees\b.{0,110}\b(?:volunteer time off|VTO)\b',d['body'],re.I)
             if not m:continue
-            year=re.search(r'\\b(?:in|during)\\s+(20\\d{2})\\b',d['body'],re.I)
+            year=re.search(r'\b(?:in|during)\s+(20\d{2})\b',d['body'],re.I)
             # The question asks for VTO participation, not total volunteer hours.
             score=(20 if 'volunteering-pays-off' in d['url'] else 0)+(10 if 'new paid benefit' in d['body'].lower() else 0)
             if year and str(year.group(1)) in q:score+=100
@@ -64,20 +64,20 @@ def answer_evidence(question, sid, docs, facts, observed_date):
 
     if 'galena' in q and ('address' in q or 'where' in q):
         candidates=[d for d in docs if '/contact' in d['url'] and
-                    re.search(r'11375\\s+Oldenburg\\s+(?:Ln\\.?|Lane)',d['body'],re.I)]
+                    re.search(r'11375\s+Oldenburg\s+(?:Ln\.?|Lane)',d['body'],re.I)]
         if candidates:
             d=candidates[0]
             return result('Galena branch: 11375 Oldenburg Lane, Galena, IL 61036.',[d])
 
     if 'branch' in q and ('same' in q or 'all' in q) and ('hour' in q or 'schedule' in q):
-        early=[d for d in docs if re.search(r'8:30\\s*a\\.?m\\.?\\s*[–-]\\s*12:30\\s*p\\.?m',d['body'],re.I)]
-        regular=[d for d in docs if re.search(r'(?:monday\\s*[–-]\\s*friday|mon\\s*[–-]\\s*fri).*?9\\s*a\\.?m\\.?\\s*[–-]\\s*5\\s*p\\.?m',d['body'],re.I)]
+        early=[d for d in docs if re.search(r'8:30\s*a\.?m\.?\s*[–-]\s*12:30\s*p\.?m',d['body'],re.I)]
+        regular=[d for d in docs if re.search(r'(?:monday\s*[–-]\s*friday|mon\s*[–-]\s*fri).*?9\s*a\.?m\.?\s*[–-]\s*5\s*p\.?m',d['body'],re.I)]
         if early and regular:
             return result('No. Lobby schedules differ by branch. Some have Saturday hours until 12:30 p.m. (half past noon); others operate Monday-Friday 9 a.m.-5 p.m. and close on weekends. Check the specific branch.',[early[0],regular[0]])
 
     if 'saving' in q and 'tier' in q and ('0.35' in q or 'highest' in q or 'maximum' in q):
         rows=[d for d in docs if d['url'].rstrip('/')=='https://www.dupaco.com/rates'
-              and d['body'].startswith('|') and re.search(r'\\|\\s*Share Savings\\s*\\|',d['body'],re.I)]
+              and d['body'].startswith('|') and re.search(r'\|\s*Share Savings\s*\|',d['body'],re.I)]
         if rows:
             apys=[]
             for d in rows:
@@ -89,9 +89,9 @@ def answer_evidence(question, sid, docs, facts, observed_date):
                 highest=max(apys,key=lambda x:x[0])
                 return result('No. Share Savings APY tiers top out at '+format(highest[0],'.2f')+'% for the '+highest[1]+' balance tier; 0.35% is not a Share Savings APY.',[highest[2]])
 
-    if 'certificate' in q and ('rate' in q or 'certificate of accounts' in q) and not re.search(r'\\b\\d{1,3}\\s*[- ]?month\\b',q):
+    if 'certificate' in q and ('rate' in q or 'certificate of accounts' in q) and not re.search(r'\b\d{1,3}\s*[- ]?month\b',q):
         rows=[d for d in docs if d['url'].rstrip('/')=='https://www.dupaco.com/rates'
-              and d['body'].startswith('|') and re.search(r'\\|\\s*\\d{1,3}\\s+Month\\s+(?:Fixed\\s+)?(?:Jumbo\\s+)?Certificate',d['body'],re.I)]
+              and d['body'].startswith('|') and re.search(r'\|\s*\d{1,3}\s+Month\s+(?:Fixed\s+)?(?:Jumbo\s+)?Certificate',d['body'],re.I)]
         if rows:
             items=[];seen=set()
             for d in rows:
@@ -101,7 +101,7 @@ def answer_evidence(question, sid, docs, facts, observed_date):
                 if not m:continue
                 seen.add(cells[0]);items.append((cells[0],m.group(),d))
             if len(items)>=4:
-                items.sort(key=lambda x:(int(re.search(r'\\d+',x[0]).group()),x[0]))
+                items.sort(key=lambda x:(int(re.search(r'\d+',x[0]).group()),x[0]))
                 return result('Certificate APYs by term: '+'; '.join(name+': '+rate for name,rate,_ in items)+'.',
                               list(dict((d['url'],d) for _,_,d in items).values()))
 
