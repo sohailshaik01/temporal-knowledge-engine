@@ -12,3 +12,13 @@ snapshots_zip/
 report.json
 per_question.jsonl
 .DS_Store
+
+# Local participant-kit inputs and evaluation artifacts
+harness/
+eval/
+hackathon-knowledge-kit-participant/
+evaluation_results*/
+conflict_audit*/
+*_results/
+*.jsonl
+*.zip
