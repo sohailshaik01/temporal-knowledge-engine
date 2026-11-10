@@ -272,8 +272,8 @@ class TemporalKnowledge:
         # terms share one passage. Unchanged terms do not produce conflicts.
         certificate_versions = defaultdict(list)
         certificate_pattern = re.compile(
-            r'\\b(\\d{1,3})\\s*[- ]\\s*month\\s+certificate\\s+'
-            r'(APY|APR)\\s*:\\s*(\\d+(?:\\.\\d+)?\\s*%)', re.I)
+            r'\b(\d{1,3})\s*[- ]\s*month\s+certificate\s+'
+            r'(APY|APR)\s*:\s*(\d+(?:\.\d+)?\s*%)', re.I)
         for day, sid in self.snapshots:
             for d in self.index[sid]:
                 if d['auth'] < 0:
