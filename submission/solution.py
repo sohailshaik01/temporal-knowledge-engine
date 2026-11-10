@@ -268,6 +268,40 @@ class TemporalKnowledge:
                 resolution=winner[2],
                 reason='The same fact changed between dated website snapshots; the later snapshot supersedes the earlier value.'
             ))
+        # Compare individually qualified certificate APYs even when several
+        # terms share one passage. Unchanged terms do not produce conflicts.
+        certificate_versions = defaultdict(list)
+        certificate_pattern = re.compile(
+            r'\\b(\\d{1,3})\\s*[- ]\\s*month\\s+certificate\\s+'
+            r'(APY|APR)\\s*:\\s*(\\d+(?:\\.\\d+)?\\s*%)', re.I)
+        for day, sid in self.snapshots:
+            for d in self.index[sid]:
+                if d['auth'] < 0:
+                    continue
+                for match in certificate_pattern.finditer(d['body']):
+                    term, metric, value = match.groups()
+                    key = (d['url'].rstrip('/').lower(), int(term), metric.lower())
+                    certificate_versions[key].append(
+                        (day, sid, value.replace(' ', ''), d, match.group(0)))
+        for (url, term, metric), entries in certificate_versions.items():
+            ordered = sorted(entries, key=lambda x: (x[0], x[1]))
+            distinct = list(dict.fromkeys(x[2] for x in ordered))
+            if len(distinct) < 2:
+                continue
+            winner = ordered[-1]
+            loser = next(x for x in ordered if x[2] != winner[2])
+            conflicts.append(Conflict(
+                topic=f'{term}-month certificate {metric.upper()}',
+                values=distinct,
+                sources=[
+                    Source(url=loser[3]['url'], snapshot_id=loser[1],
+                           quote=loser[4]),
+                    Source(url=winner[3]['url'], snapshot_id=winner[1],
+                           quote=winner[4])
+                ],
+                resolution=winner[2],
+                reason='The same certificate term and metric changed between dated snapshots; the newer published value takes precedence.'
+            ))
         latest_sid=self._date(None)
         same_snapshot=defaultdict(list)
         for f in self.facts.get(latest_sid,[]):
