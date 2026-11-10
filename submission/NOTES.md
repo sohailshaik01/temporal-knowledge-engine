@@ -10,4 +10,8 @@ This is an offline baseline, not a guarantee of correctness: structured table in
 
 The candidate-postings index limits retrieval to passages containing query terms, rather than scanning every passage. Source ranking now places greater weight on matching page titles and official product pages, and returns longer evidence when a short excerpt would lose relevant table context.
 
-On the supplied 40-question public evaluation, the score improved from 0.1557 to 0.1924 with repeat checks disabled. Snapshot ingestion completed in 3.7 seconds. The current score remains low, and the implementation is not ready for final grading. No benchmark data or website snapshot content is included in the repository.
+The latest local run against the 40-question public evaluation scored 0.3722 with repeat checks disabled, compared with 0.1924 for the previous baseline. Snapshot ingestion completed in 4.9 seconds. The score remains below the desired quality threshold, and the implementation is not ready for final grading. No benchmark data or website snapshot content is included in the repository.
+
+## Evidence ranking
+
+The retrieval ranker now favors numeric table rows over rate disclaimers, distinguishes jumbo certificate tiers from standard certificates, and downranks historical educational material for current loan-rate questions. It also rewards explicit numeric qualifiers in the question. These are general ranking rules rather than stored answers to the evaluation questions.
