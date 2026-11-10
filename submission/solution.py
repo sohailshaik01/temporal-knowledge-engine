@@ -168,23 +168,56 @@ class TemporalKnowledge:
         return Answer(text=candidate,sources=[Source(url=best['url'],snapshot_id=sid,quote=candidate[:220])],confident=True)
 
     def conflicts(self):
-        if self.conflict_cache is not None:return self.conflict_cache
-        # Compare numeric claims only across the same URL/heading, rather than
-        # treating different tiers or unrelated figures as contradictions.
-        versions=defaultdict(list)
-        for day,sid in self.snapshots:
+        if self.conflict_cache is not None:
+            return self.conflict_cache
+        # Align facts by page, section and surrounding wording. A table with
+        # multiple terms or balances is not a single contradictory fact.
+        pattern = re.compile(r'(?<![\w.])\d+(?:\.\d+)?\s*%')
+        versions = defaultdict(list)
+        for day, sid in self.snapshots:
             for d in self.index[sid]:
-                if d['auth']<0:continue
-                vals=tuple(sorted(set(re.findall(r'\b\d+(?:\.\d+)?\s*%',d['body']))))
-                if len(vals)==1:
-                    versions[(d['url'],d['head'].lower())].append((day,sid,vals[0],d))
-        out=[]
-        for (url,head),items in versions.items():
-            vals=list(dict.fromkeys(x[2] for x in items))
-            if len(vals)<2:continue
-            newest=max(items,key=lambda x:x[0]); oldest=min(items,key=lambda x:x[0])
-            out.append(Conflict(topic=(newest[3]['title']+' '+head)[:180],values=vals[:8],sources=[Source(url=url,snapshot_id=oldest[1]),Source(url=url,snapshot_id=newest[1])],resolution=newest[2],reason='Later snapshot of the same authoritative page and section supersedes earlier rate.'))
-        self.conflict_cache=out[:250]
+                if d['auth'] < 0:
+                    continue
+                body = d['body']
+                values = list(dict.fromkeys(x.strip() for x in pattern.findall(body)))
+                if len(values) != 1:
+                    continue
+                # Exact same surrounding text with a changed percentage is
+                # stronger evidence than sharing a heading alone.
+                context = re.sub(r'\s+', ' ', pattern.sub('<rate>', body.lower()))
+                context = re.sub(r'[^a-z0-9<> ]+', ' ', context)
+                words = toks(context)
+                if len(words) < 4:
+                    continue
+                signature = ' '.join(words[:32])
+                key = (d['url'].rstrip('/').lower(), d['head'].lower(), signature)
+                versions[key].append((day, sid, values[0], d))
+        conflicts = []
+        seen = set()
+        for (url, heading, signature), entries in versions.items():
+            ordered = sorted(entries, key=lambda x: (x[0], x[1]))
+            distinct = list(dict.fromkeys(x[2] for x in ordered))
+            if len(distinct) < 2:
+                continue
+            winner = ordered[-1]
+            loser = next(x for x in ordered if x[2] != winner[2])
+            dedup = (url, heading, tuple(sorted(distinct)))
+            if dedup in seen:
+                continue
+            seen.add(dedup)
+            conflicts.append(Conflict(
+                topic=(winner[3]['title'] + ' — ' + heading).strip(' —')[:180],
+                values=distinct,
+                sources=[
+                    Source(url=loser[3]['url'], snapshot_id=loser[1],
+                           quote=loser[3]['body'][:180]),
+                    Source(url=winner[3]['url'], snapshot_id=winner[1],
+                           quote=winner[3]['body'][:180])
+                ],
+                resolution=winner[2],
+                reason='The same fact changed between dated website snapshots; the later snapshot supersedes the earlier value.'
+            ))
+        self.conflict_cache = conflicts[:250]
         return self.conflict_cache
 
 def build():return TemporalKnowledge()
