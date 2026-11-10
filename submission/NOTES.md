@@ -1,45 +1,61 @@
-# Temporal knowledge system
+# Implementation notes
 
-This implementation uses only the Python standard library, requires no API keys and never calls the live website. Each ingested snapshot is independently indexed with page URL, heading, crawl identifier, and passage text. Questions with an `as_of` date select the most recent snapshot not later than that date. Unqualified questions use the latest snapshot.
+## Scope
 
-Retrieval combines inverse-document-frequency weighting, title/heading matching, source-authority heuristics, and qualifiers such as term, model year, and account type. Answers cite the chosen snapshot URL and a supporting excerpt. The system abstains when evidence cannot be retrieved. The conflict extractor compares single percentage claims under matching page URLs and headings over time, favoring the latest authoritative version.
+The system answers questions against a finite series of dated website snapshots. It does not crawl the live site, use external APIs, or require API keys. The runtime uses Python's standard library and implements the participant harness contract through `build()`, `ingest()`, `answer()`, and `conflicts()`.
 
-This is an offline baseline, not a guarantee of correctness: structured table interpretation, stronger within-snapshot conflict detection, and answer calibration should be validated against the public scorer before final submission. The website snapshot data is intentionally excluded from any public repository.
+## Snapshot model and temporal semantics
 
-## Public evaluation
+Each snapshot is ingested into its own passage index and typed-fact collection. Indexed passages retain page URL, title, heading, body, and snapshot ID. The engine selects the most recent captured snapshot not later than an `as_of` date, or the latest available snapshot when no date is specified. Questions predating the first snapshot return an unconfident answer.
 
-The candidate-postings index limits retrieval to passages containing query terms, rather than scanning every passage. Source ranking now places greater weight on matching page titles and official product pages, and returns longer evidence when a short excerpt would lose relevant table context.
+The rate extractor records an explicit published effective date when available, separately from the snapshot capture date. A crawl date is **not** treated as a published effective date. When comparing facts, APR, APY, dividend rate, product, and term/balance qualifiers are kept distinct.
 
-The latest local run against the 40-question public evaluation scored 0.3722 with repeat checks disabled, compared with 0.1924 for the previous baseline. Snapshot ingestion completed in 4.9 seconds. The score remains below the desired quality threshold, and the implementation is not ready for final grading. No benchmark data or website snapshot content is included in the repository.
+## Retrieval and answers
 
-## Evidence ranking
+A postings index limits candidate passages to those containing query terms. Candidate ranking combines inverse-document-frequency weighting, matches in titles and headings, source-authority heuristics, and numeric/product qualifiers. Relevant rate rows are preferred over general disclosures; unrelated products, historical educational pages, and ambiguous tiers are downranked.
 
-The retrieval ranker now favors numeric table rows over rate disclaimers, distinguishes jumbo certificate tiers from standard certificates, and downranks historical educational material for current loan-rate questions. It also rewards explicit numeric qualifiers in the question. These are general ranking rules rather than stored answers to the evaluation questions.
+The answer path uses evidence aggregation and typed-rate matching when applicable, followed by ranked passage retrieval. Specific evidence rules cover cases such as multi-row certificate and card rates, mobile wallets, branch information, membership links, and dated announcements. These rules rely on ingested content rather than live lookups. Answers include snapshot-specific source references and, where available, excerpts. The engine abstains when it cannot substantiate a requested fact.
 
-## Evaluation update
+## Conflict detection and resolution
 
-The latest local run against the supplied 40-question public evaluation scored 0.4867 overall (previous recorded run: 0.3722), with 4.2 seconds for ingestion and 0.26 seconds at the 95th percentile for answers. This run did not include repeated-question checks. Product category questions now collect evidence across multiple rows, loan and branch questions abstain when specific evidence is missing, and the rate ranker better distinguishes common tiers. Conflict resolution and current-value questions remain weak and require further work. These scores are development diagnostics, not hidden-set results.
+The `conflicts()` method reports disagreements using three complementary paths:
 
-## Contact and branch evidence
+1. **Historical single-rate passages:** Compare passages with one percentage under matching URL, heading, and normalized surrounding text.
+2. **Qualified certificate rates:** Compare APY/APR values for the same month-term certificate at the same URL across dated snapshots, even when several certificate terms appear in one passage. Unchanged terms are not reported as conflicts.
+3. **Within-snapshot typed facts:** Compare matching product/tier/metric keys across authoritative pages in the latest snapshot.
 
-The latest local public evaluation run (40 questions, repeat checks disabled) scored 0.5177, up from the previous recorded 0.4867. Snapshot ingestion took 4.3 seconds. The retrieval scorer now gives additional weight to passages with explicit telephone numbers for contact queries and clock times for branch-hours queries. The conflict-resolution and current-value categories remain unresolved; this is not a final submission benchmark.
+Historical conflicts favor the latest captured version. For disagreements across official pages in one snapshot, explicit effective dates take precedence, followed by recognized rate-sheet authority and source-authority heuristics. Each reported conflict includes values, supporting source references, a resolution, and a reason.
 
-## Structured facts and historical validity
+These are evidence-based heuristics, not a general semantic contradiction detector. Changed URLs or differently worded claims may evade alignment; sparse or conflicting effective-date metadata can limit certainty. Multi-rate historical passages outside the specifically qualified certificate pattern are not comprehensively aligned.
 
-The typed rate extractor stores product and balance/term qualifiers, the financial metric, observed value, source URL, snapshot identifier, and any explicitly published effective date. Queries first attempt qualified fact matching when the requested metric and product are clear, then fall back to the indexed passage retriever. APR, APY, and dividend rate remain distinct. Snapshot selection is ordered by capture date; an effective date is not inferred from a crawl timestamp.
+## Validation
 
-Conflict detection now includes disagreements between matching product/tier/metric facts on different official pages within the latest snapshot, in addition to historical changes. A later explicit effective date has precedence, followed by an official rate sheet and source authority. The system cannot infer a precise validity interval where none was published.
+The following results were observed locally with the participant kit after the certificate conflict fix at commit `b1f70a2677391fd099459f8b1d5e391639abdb5b`:
 
-Navigational questions return grounded destination links. Branch-closure questions are answered from the closure notice when it is available in the selected snapshot. The offline runtime uses no external services.
+| Evaluation | Observed result |
+| --- | --- |
+| Public QA evaluation | 0.955 over 40 questions |
+| Repeat consistency | 1.0 over 10 checks |
+| Paraphrase consistency | 1.0 over 20 groups |
+| Public errors | 0 |
+| Public p95 answer latency | 0.06 s |
+| Public ingestion | 1.5 s |
+| Supplied conflict self-test | F1 1.0; 1 expected, 1 submitted, 1 matched |
+| Conflict resolution on self-test | 1.0 |
 
-## Latest public evaluation
+The supplied conflict self-test has only one gold conflict, a 6-month certificate APY change from 2.95% to 3.50%. The unchanged 12-month rate should not trigger a conflict. The contract-level synthetic tests passed after the fix.
 
-The latest local development run across all 40 public questions scored **0.7313**, compared with **0.5797** before this iteration. Ten repeat checks were enabled, with 1.0 reported repeat consistency, zero execution errors, and a 9.9-second ingestion time. Category scores included temporal-as-of 0.75, stale-trap 0.59, tier-disambiguation 1.00, and conflict-resolution 0.33. These are public-set diagnostics, not hidden-set performance. The local implementation was tested before the corresponding source modules were committed; a clean-checkout full evaluation remains necessary to verify the committed build independently.
+The public QA run did not supply conflict gold, so it does not measure the conflict pillar. Conversely, the separate conflict self-test's QA score was 0.6. Results should be read as targeted checks, not a prediction of hidden evaluation.
 
-Remaining limitations include incomplete list aggregation, some cross-page conflicts, and questions whose relevant facts are not represented by a structured table.
+## Known limitations
 
-## Evidence aggregation iteration
+- Retrieval and extraction rules are tailored to common website and financial-rate formats; unseen phrasing and layout changes may reduce accuracy.
+- List completeness remains imperfect (0.75 on the public list-completeness category).
+- Historical conflict matching is conservative to limit false positives; it may miss cross-page or multi-value contradictions.
+- The evaluator's free-text cases may not be fully reflected by deterministic public checks.
+- Source precedence cannot establish an exact validity interval when a page does not publish one.
+- The system is offline and cannot verify whether a website fact remains true beyond the latest supplied snapshot.
 
-The evidence-first module now handles mobile-wallet compatibility, complete credit-card APR rows when present, year-qualified volunteer reporting, Forbes recognition, Home$tart descriptions, membership eligibility, and contact updates. Each specialized answer requires matching passages or typed rate facts from the selected snapshot, retains the supporting source URL, and falls back to the standard retriever when insufficient evidence exists. Standalone synthetic tests cover multi-wallet extraction, unsupported claims, and credit-card APR aggregation.
+## Reproducibility and data boundaries
 
-**Evaluation status:** This change has not yet been measured against the full participant-kit public evaluator. The earlier 0.7313 score must not be interpreted as the score of this revision. Run the public evaluator locally before judging whether the 0.85 development target has been reached.
+Run standalone checks with `python3.11 tests/test_facts.py` and `python3.11 tests/test_evidence.py`. Contract tests and the full public evaluator require the separately supplied participant kit. The public repository contains implementation code and synthetic regression tests, but not website snapshots, private evaluation files, generated reports, or credentials.
