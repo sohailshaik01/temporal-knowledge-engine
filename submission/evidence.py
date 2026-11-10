@@ -91,7 +91,7 @@ def answer_evidence(question, sid, docs, facts, observed_date):
 
     if 'certificate' in q and ('rate' in q or 'certificate of accounts' in q) and not re.search(r'\b\d{1,3}\s*[- ]?month\b',q):
         rows=[d for d in docs if d['url'].rstrip('/')=='https://www.dupaco.com/rates'
-              and d['body'].startswith('|') and re.search(r'\|\s*\d{1,3}\s+Month\s+(?:Fixed\s+)?(?:Jumbo\s+)?Certificate',d['body'],re.I)]
+              and d['body'].startswith('|') and re.search(r'\|\s*\d{1,3}\s+Month(?:\s+(?:Fixed|Jumbo|Certificate|Special))*\s*\|',d['body'],re.I)]
         if rows:
             items=[];seen=set()
             for d in rows:
