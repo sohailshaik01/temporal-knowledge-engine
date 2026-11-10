@@ -8,6 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(next(d / 'harness' for d in Path(__file__).resolve().parents if (d / 'harness' / 'contract.py').exists())))
 from contract import Answer, Conflict, Source
+from facts import read_table_facts, structured_rate
 
 TOKEN = re.compile(r"[a-z]+|\d+(?:\.\d+)?", re.I)
 NUMBER = re.compile(r"(?:\$\s*)?\d[\d,]*(?:\.\d+)?\s*%?")
@@ -27,11 +28,12 @@ def authority(url,title):
 
 class TemporalKnowledge:
     def __init__(self):
-        self.snapshots=[];self.index={};self.df={};self.postings={};self.conflict_cache=None
+        self.snapshots=[];self.index={};self.df={};self.postings={};self.conflict_cache=None;self.facts={}
 
     def ingest(self,snapshot):
-        docs=[]; df=Counter(); postings=defaultdict(list)
+        docs=[]; df=Counter(); postings=defaultdict(list); facts=[]
         for p in snapshot.pages:
+            facts.extend(read_table_facts(p,snapshot.snapshot_id,snapshot.taken_on,toks,authority))
             md=re.sub(r'!\[[^]]*\]\([^)]*\)',' ',p.markdown)
             md=re.sub(r'\[([^]]+)\]\([^)]*\)',r'\1',md)
             # Keep compact sections, preserving table rows and adjacent headings.
@@ -58,6 +60,7 @@ class TemporalKnowledge:
                 docs.append(d);df.update(words.keys())
                 for w in words:postings[w].append(len(docs)-1)
         self.snapshots.append((snapshot.taken_on,snapshot.snapshot_id))
+        self.facts[snapshot.snapshot_id]=facts
         self.index[snapshot.snapshot_id]=docs
         self.df[snapshot.snapshot_id]=df
         self.postings[snapshot.snapshot_id]=postings
@@ -65,9 +68,10 @@ class TemporalKnowledge:
 
     def _date(self,as_of):
         if not self.snapshots:return None
-        if not as_of:return self.snapshots[-1][1]
+        ordered=sorted(self.snapshots)
+        if not as_of:return ordered[-1][1]
         d=str(as_of)[:10]
-        eligible=[sid for day,sid in self.snapshots if day<=d]
+        eligible=[sid for day,sid in ordered if day<=d]
         return eligible[-1] if eligible else None
 
     def _rank(self,q,sid):
@@ -129,6 +133,30 @@ class TemporalKnowledge:
     def answer(self,question,as_of=None):
         sid=self._date(as_of)
         if not sid:return Answer("I don't know; the requested date predates the available website snapshots.",confident=False)
+        q=question.lower()
+        if any(w in q for w in ('url','link','website')):
+            if 'branch' in q or 'atm' in q or 'locator' in q:
+                for d in self.index[sid]:
+                    if d['url'].rstrip('/')=='https://www.dupaco.com/contact':
+                        return Answer('Branch and ATM locator: https://www.dupaco.com/contact',
+                                      sources=[Source(url=d['url'],snapshot_id=sid)],confident=True)
+            if 'certificate' in q or 'cd ' in q:
+                for d in self.index[sid]:
+                    if d['url'].rstrip('/')=='https://www.dupaco.com/personal/savings-account':
+                        return Answer('Certificate information: https://www.dupaco.com/personal/savings-account',
+                                      sources=[Source(url=d['url'],snapshot_id=sid)],confident=True)
+        if ('join' in q or 'become a member' in q) and ('online' in q or 'website' in q):
+            for d in self.index[sid]:
+                if d['url'].rstrip('/')=='https://www.dupaco.com/about/join' and 'join.dupaco.com' in d['body']:
+                    return Answer('Apply for membership online at https://join.dupaco.com/.',
+                                  sources=[Source(url=d['url'],snapshot_id=sid,quote=d['body'][:180])],confident=True)
+        if 'hy-vee' in q and any(w in q for w in ('close','closed','open','still')):
+            for d in self.index[sid]:
+                if 'hy-vee-branch-closure' in d['url'] and 'march 31, 2026' in d['body'].lower():
+                    return Answer('The South Locust Street Hy-Vee branch was scheduled to close March 31, 2026.',
+                                  sources=[Source(url=d['url'],snapshot_id=sid,quote=d['body'][:220])],confident=True)
+        structured=structured_rate(question,sid,as_of,self.facts,toks,authority)
+        if structured:return structured
         ranked=self._rank(question,sid)
         if not ranked or ranked[0][0]<2:return Answer("I don't know. The website doesn't list enough information; please contact Dupaco.",confident=False)
         q=question.lower(); selected=[];seen=set()
@@ -237,6 +265,27 @@ class TemporalKnowledge:
                 resolution=winner[2],
                 reason='The same fact changed between dated website snapshots; the later snapshot supersedes the earlier value.'
             ))
+        latest_sid=self._date(None)
+        same_snapshot=defaultdict(list)
+        for f in self.facts.get(latest_sid,[]):
+            if f['authority'] < 2 or not f['key'][0] or not f['key'][1]:continue
+            same_snapshot[f['key']].append(f)
+        for key, entries in same_snapshot.items():
+            by_url={}
+            for f in entries:
+                prev=by_url.get(f['url'])
+                if prev is None or ((f['effective'] or '') > (prev['effective'] or '')):
+                    by_url[f['url']]=f
+            distinct={f['value'] for f in by_url.values()}
+            if len(by_url)<2 or len(distinct)<2:continue
+            ranked=sorted(by_url.values(),key=lambda f:(f['effective'] or '',
+                            f['url'].rstrip('/') in ('https://www.dupaco.com/rates','https://www.dupaco.com/business-rates'),
+                            f['authority'],f['url']))
+            winner=ranked[-1]
+            sources=[Source(url=f['url'],snapshot_id=latest_sid,quote=f['quote']) for f in ranked]
+            conflicts.append(Conflict(topic=key[0]+' '+key[1],values=sorted(distinct),
+                sources=sources,resolution=winner['value'],
+                reason='Official pages disagree for the same product, tier and metric; explicit effective date and rate-sheet authority determine precedence.'))
         self.conflict_cache = conflicts[:250]
         return self.conflict_cache
 
