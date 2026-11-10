@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(next(d / 'harness' for d in Path(__file__).resolve().parents if (d / 'harness' / 'contract.py').exists())))
 from contract import Answer, Conflict, Source
 from facts import read_table_facts, structured_rate
+from evidence import answer_evidence
 
 TOKEN = re.compile(r"[a-z]+|\d+(?:\.\d+)?", re.I)
 NUMBER = re.compile(r"(?:\$\s*)?\d[\d,]*(?:\.\d+)?\s*%?")
@@ -155,6 +156,8 @@ class TemporalKnowledge:
                 if 'hy-vee-branch-closure' in d['url'] and 'march 31, 2026' in d['body'].lower():
                     return Answer('The South Locust Street Hy-Vee branch was scheduled to close March 31, 2026.',
                                   sources=[Source(url=d['url'],snapshot_id=sid,quote=d['body'][:220])],confident=True)
+        enriched=answer_evidence(question,sid,self.index[sid],self.facts.get(sid,[]),next(day for day,key in self.snapshots if key==sid))
+        if enriched:return enriched
         structured=structured_rate(question,sid,as_of,self.facts,toks,authority)
         if structured:return structured
         ranked=self._rank(question,sid)
